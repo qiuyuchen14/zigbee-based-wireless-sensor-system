@@ -1,0 +1,174 @@
+/*
+ * Sketch for testing sleep mode with wake up on WDT.
+ *the sensor is DS18B20 
+ * Qiuyu Chen---2014.
+ *
+ */
+#include <avr/sleep.h>
+#include <avr/power.h>
+#include <avr/wdt.h>
+#include "OneWire.h"
+#include "Wire.h"
+#include "DallasTemperature.h"
+#include "XBee.h"
+#define VERSION = "1.02";
+#define LED_PIN (13)
+
+volatile int f_wdt=1;
+// Data wire is plugged into pin 2 on the Arduino
+#define ONE_WIRE_BUS 8
+// Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
+OneWire oneWire(ONE_WIRE_BUS);
+// Pass our oneWire reference to Dallas Temperature. 
+DallasTemperature sensors(&oneWire);
+DeviceAddress sensor;
+XBee xbee=XBee();
+uint8_t payload[4] = { 0, 0, 0, 0 };
+
+typedef struct{
+//float temp;
+}
+
+payloadTx;
+payloadTx SmartSensor;
+
+XBeeAddress64 addr64 = XBeeAddress64(0x0013a200, 0x40B96EFA);
+ZBTxRequest zbTx=ZBTxRequest (addr64,payload,sizeof(payload));
+ZBTxStatusResponse txStatus = ZBTxStatusResponse();
+
+
+/***************************************************
+ *  Name:        ISR(WDT_vect)
+ *
+ *  Returns:     Nothing.
+ *
+ *  Parameters:  None.
+ *
+ *  Description: Watchdog Interrupt Service. This
+ *               is executed when watchdog timed out.
+ *
+ ***************************************************/
+ISR(WDT_vect)
+{
+  if(f_wdt == 0)
+  {
+    f_wdt=1;
+  }
+  else
+  {
+   // Serial.println("WDT Overrun!!!");
+  }
+}
+
+
+/***************************************************
+ *  Name:        enterSleep
+ *
+ *  Returns:     Nothing.
+ *
+ *  Parameters:  None.
+ *
+ *  Description: Enters the arduino into sleep mode.
+ *
+ ***************************************************/
+void enterSleep(void)
+{
+  set_sleep_mode(SLEEP_MODE_PWR_DOWN);   /* EDIT: could also use SLEEP_MODE_PWR_DOWN for lowest power consumption. */
+  sleep_enable();
+  
+  /* Now enter sleep mode. */
+  sleep_mode();
+  
+  /* The program will continue from here after the WDT timeout*/
+  sleep_disable(); /* First thing to do is disable sleep. */
+  /* Re-enable the peripherals. */
+  power_all_enable();
+}
+
+
+
+/***************************************************
+ *  Name:        setup
+ *
+ *  Returns:     Nothing.
+ *
+ *  Parameters:  None.
+ *
+ *  Description: Setup for the serial comms and the
+ *                Watch dog timeout. 
+ *
+ ***************************************************/
+void setup()
+{
+  Serial.begin(9600);
+  pinMode (8, OUTPUT);
+  digitalWrite (8, HIGH);
+  delay (100);
+  
+  sensors.begin();
+  xbee.setSerial(Serial);
+  delay (10);
+//  Serial.println("Initialising...");
+  delay(100); //Allow for serial print to complete.
+
+  pinMode(LED_PIN,OUTPUT);
+
+  /*** Setup the WDT ***/
+  
+  /* Clear the reset flag. */
+  MCUSR &= ~(1<<WDRF);
+  
+  /* In order to change WDE or the prescaler, we need to
+   * set WDCE (This will allow updates for 4 clock cycles).
+   */
+  WDTCSR |= (1<<WDCE) | (1<<WDE);
+
+  /* set new watchdog timeout prescaler value */
+  WDTCSR = 1<<WDP0 | 1<<WDP3; /* 8.0 seconds */
+  //WDTCSR =  1<<WDP3; /* 4.0 seconds */
+  
+  /* Enable the WD interrupt (note no reset). */
+  WDTCSR |= _BV(WDIE);
+  
+ // Serial.println("Initialisation complete.");
+  
+  delay(100); //Allow for serial print to complete.
+}
+
+
+
+/***************************************************
+ *  Name:        enterSleep
+ *
+ *  Returns:     Nothing.
+ *
+ *  Parameters:  None.
+ *
+ *  Description: Main application loop.
+ *
+ ***************************************************/
+void loop()
+{
+
+  if(f_wdt == 1)
+  {
+    /* Toggle the LED */
+    digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+    //digitalWrite(LED_PIN,LOW);
+    digitalWrite (ONE_WIRE_BUS, HIGH);//delay(100);
+    sensors.requestTemperatures();
+  
+    Serial.println(sensors.getTempCByIndex(0));
+    delay(10);
+    digitalWrite (8, LOW);
+       
+    /* Don't forget to clear the flag. */
+    f_wdt = 0;
+    /* Re-enter sleep mode. */
+    enterSleep();
+  }
+  else
+  {
+  /* Do nothing. */
+  }
+}
