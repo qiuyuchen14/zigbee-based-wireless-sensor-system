@@ -1,0 +1,46 @@
+#define VERSION "1.02"
+#include "XBee.h"
+#include "OneWire.h"
+#include "Wire.h"
+#include "LiquidCrystal.h"
+#include "DallasTemperature.h"
+
+XBee xbee=XBee();
+XBeeResponse response = XBeeResponse ();
+LiquidCrystal lcd(3,2,4);
+
+void setup ()
+{
+  Serial.begin (9600);
+  XBee xbee_dev_int();
+  xbee.setSerial(Serial);
+  lcd.begin(2,16);
+}
+
+void loop(){
+int dec_1,unit_1,fraction_1,fraction_2;
+
+    if (Serial.available()>=20){
+     if (Serial.read()==0x7E){
+         for (int i=0;i<14;i++){
+          Serial.print( Serial.read());
+          Serial.print("A");
+         }
+          dec_1=Serial.read()-3*16;
+          unit_1=Serial.read()-3*16;
+          Serial.read();
+          fraction_1=Serial.read()-3*16;
+          fraction_2=Serial.read()-3*16;
+          lcd.clear();
+          lcd.print("Temp:");
+          lcd.print(dec_1);
+          lcd.print(unit_1);
+          lcd.print(".");
+          lcd.print(fraction_1);
+          lcd.print(fraction_2);
+          lcd.print(" deg");
+      }
+}
+lcd.setCursor(0,1);
+lcd.print("    R&B Sensor");
+}
